@@ -5,6 +5,7 @@ request validation helper.
 
 import json
 import logging
+import typing
 import os
 import sys
 from unittest.mock import Mock
@@ -17,12 +18,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from googleapiclient.errors import HttpError
 from pydantic import TypeAdapter
 
+from auth.service_decorator import has_required_scopes
+from auth.scopes import SHEETS_WRITE_SCOPE
 from core.server import server
+from core.tool_tier_loader import resolve_tools_from_tier
 from core.utils import DictList, UserInputError, handle_http_errors
 from gsheets import sheets_tools
 from gsheets.sheets_helpers import (
     MAX_BATCH_UPDATE_REPLY_CHARS,
-    MAX_BATCH_UPDATE_REQUESTS,
     _validate_batch_update_requests,
 )
 
@@ -32,11 +35,6 @@ def _unwrap(fn):
     while hasattr(fn, "__wrapped__"):
         fn = fn.__wrapped__
     return fn
-
-
-def test_limits_match_the_spec():
-    assert MAX_BATCH_UPDATE_REQUESTS == 100
-    assert MAX_BATCH_UPDATE_REPLY_CHARS == 4000
 
 
 def test_validate_returns_kinds_in_order():
@@ -224,14 +222,27 @@ async def test_batch_update_description_guides_the_agent():
 
 
 def test_batch_update_accepts_json_string_requests():
-    adapter = TypeAdapter(DictList)
+    hints = typing.get_type_hints(
+        _unwrap(sheets_tools.batch_update_spreadsheet), include_extras=True
+    )
 
-    assert adapter.validate_python('[{"sortRange": {}}]') == [{"sortRange": {}}]
+    assert hints["requests"] == DictList
+    assert TypeAdapter(hints["requests"]).validate_python('[{"sortRange": {}}]') == [
+        {"sortRange": {}}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_batch_update_schema_requires_a_list_of_objects():
+    tool = await server.get_tool("batch_update_spreadsheet")
+    requests_schema = tool.parameters["properties"]["requests"]
+
+    assert requests_schema["type"] == "array"
+    assert requests_schema["items"]["type"] == "object"
+    assert "requests" in tool.parameters["required"]
 
 
 def test_batch_update_is_in_the_complete_tier_of_sheets():
-    from core.tool_tier_loader import resolve_tools_from_tier
-
     core_tools, _ = resolve_tools_from_tier("core", ["sheets"])
     complete_tools, services = resolve_tools_from_tier("complete", ["sheets"])
 
@@ -241,11 +252,7 @@ def test_batch_update_is_in_the_complete_tier_of_sheets():
 
 
 def test_batch_update_requires_the_sheets_write_scope():
-    import inspect
-    import re
+    required = sheets_tools.batch_update_spreadsheet._required_google_scopes
 
-    source = inspect.getsource(sheets_tools)
-    block = source[: source.index("async def batch_update_spreadsheet(")]
-    decorators = block[block.rindex("@server.tool(") :]
-
-    assert re.search(r'@require_google_service\("sheets", "sheets_write"\)', decorators)
+    assert SHEETS_WRITE_SCOPE in required
+    assert has_required_scopes({SHEETS_WRITE_SCOPE}, required)

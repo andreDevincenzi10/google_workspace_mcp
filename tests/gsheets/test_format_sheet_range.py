@@ -6,8 +6,10 @@ vertical_alignment, bold, italic, and font_size.
 """
 
 import logging
+import typing
 
 import pytest
+from pydantic import TypeAdapter
 from unittest.mock import Mock
 import sys
 import os
@@ -1068,8 +1070,9 @@ async def test_format_sheet_range_logs_option_names_not_values(caplog):
 
 
 def test_format_sheet_range_accepts_json_string_dropdown():
-    from pydantic import TypeAdapter
+    hints = typing.get_type_hints(_unwrap(format_sheet_range), include_extras=True)
 
-    from core.utils import StringList
-
-    assert TypeAdapter(StringList).validate_python('["A","B"]') == ["A", "B"]
+    assert TypeAdapter(hints["dropdown_values"]).validate_python('["A","B"]') == [
+        "A",
+        "B",
+    ]

@@ -5,7 +5,12 @@
   auth, persistence or cross-service contract is touched (`auth/`, `core/server.py` unchanged).
 - Scope: `gsheets/` only (+ `core/tool_tiers.yaml`, skill reference, tests, docs). Upstream `v2.4.0` text for dropdowns,
   merges, borders and tab style; new `batch_update_spreadsheet` passthrough.
-- Reviews: stage-5 review pending at the time of writing (see the PR for its findings).
+- Reviews: one stage-5 review (general + simplification), 6 findings. Applied: plan Task 7 ticked in the branch
+  (high, `partial-delivery`); JSON-string tests now check the registered tool's real signature types and schema; the
+  scope test now reads the tool's `_required_google_scopes` like `tests/test_scopes.py`; the constants-only test
+  deleted; test imports moved to the top. Rejected: the finding asking for `- [ ]` post-merge items in §8 — at L2 §8
+  is "n/a" by the report format, and `- [ ]` lines would make the deploy look for a workflow that does not exist;
+  the live checks are listed in the plan and the PR body instead.
 - Scenarios: 5/5 passed (unit suite, lint, local boot with `tools/list`, mutation check, file-scope check).
 - Verdict: **ready with caveats** — no real Google call was made (no Google credentials on the host); the live
   scenario is a post-merge criterion (§8).
@@ -19,7 +24,7 @@
 
 ## 3. Evidence per scenario
 1. **Unit suite** — `uv run pytest tests/gsheets tests/test_scopes.py tests/test_permissions.py tests/test_main_permissions_tier.py -q`:
-   262 passed (baseline of `tests/gsheets` was 100; now 172 there). PASS.
+   all pass (baseline of `tests/gsheets` was 100; now 174 there). PASS.
 2. **Lint** — `uv run ruff check .` clean; `uv run ruff format --check gsheets tests` clean. PASS.
 3. **Local boot, `tools/list`** — server started with `MCP_ENABLE_OAUTH21=true EXTERNAL_OAUTH21_PROVIDER=true
    MCP_TRUST_BEARER_TOKEN=true` and dummy OAuth client values; MCP `initialize` + `tools/list` with
