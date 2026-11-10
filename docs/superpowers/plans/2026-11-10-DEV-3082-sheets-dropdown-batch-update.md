@@ -39,9 +39,9 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 
 **Files:** none
 
-- [ ] **Step 1:** `cd` into the worktree and run `timeout 300 uv sync --extra test --frozen` (the CI's command, `.github/workflows/pytest.yml`). Expected: exit 0.
-- [ ] **Step 2:** Baseline: `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass (record the count).
-- [ ] **Step 3:** `uv run ruff check gsheets tests/gsheets && uv run ruff format --check gsheets tests/gsheets` (ruff from the dev group; if absent, `uvx ruff@<version in .pre-commit-config.yaml or ruff.yml>`). Expected: clean.
+- [x] **Step 1:** `cd` into the worktree and run `timeout 300 uv sync --extra test --frozen` (the CI's command, `.github/workflows/pytest.yml`). Expected: exit 0.
+- [x] **Step 2:** Baseline: `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass (record the count).
+- [x] **Step 3:** `uv run ruff check gsheets tests/gsheets && uv run ruff format --check gsheets tests/gsheets` (ruff from the dev group; if absent, `uvx ruff@<version in .pre-commit-config.yaml or ruff.yml>`). Expected: clean.
 
 ## Phase 2: Port the upstream features
 
@@ -55,14 +55,14 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 **Interfaces:**
 - Produces: `_format_sheet_range_impl(service, spreadsheet_id, range_name, …, merge_cells=None, merge_type=None, borders=None, border_style=None, border_color=None, dropdown_values: Optional[List[str]] = None, dropdown_strict=None, clear_dropdown=None) -> dict` (keys `range_name`, `spreadsheet_id`, `summary`), exactly as upstream `v2.4.0`.
 
-- [ ] **Step 1: Port the tests.** Append to `tests/gsheets/test_format_sheet_range.py` every test of `upstream-v2.4.0:tests/gsheets/test_format_sheet_range.py` from `test_format_merge_cells_default_all` to the end of the file (merges, `test_format_sheet_range_is_destructive`, borders, dropdowns, wrapper forwarding), plus any helper/fixture those tests use that the fork file lacks. Do not change the existing fork tests.
-- [ ] **Step 2: Add the logging and coercion tests** in the same file:
+- [x] **Step 1: Port the tests.** Append to `tests/gsheets/test_format_sheet_range.py` every test of `upstream-v2.4.0:tests/gsheets/test_format_sheet_range.py` from `test_format_merge_cells_default_all` to the end of the file (merges, `test_format_sheet_range_is_destructive`, borders, dropdowns, wrapper forwarding), plus any helper/fixture those tests use that the fork file lacks. Do not change the existing fork tests.
+- [x] **Step 2: Add the logging and coercion tests** in the same file:
   - `test_format_sheet_range_logs_option_names_not_values` — call the wrapper (`format_sheet_range.fn`, as the ported wrapper tests do) with `dropdown_values=["Segredo1","Segredo2"]`, `borders="outer"` under `caplog.at_level(logging.INFO)`; assert a record contains `Options: borders, dropdown_values` (names sorted in signature order: merge_cells, merge_type, borders, border_style, border_color, dropdown_values, dropdown_strict, clear_dropdown) and no record contains `Segredo1`.
   - `test_format_sheet_range_accepts_json_string_dropdown` — through the registered tool's argument validation (the way `tests/test_*` validate StringList elsewhere, or `pydantic.TypeAdapter(StringList).validate_python('["A","B"]') == ["A","B"]` if no tool-level harness exists) .
-- [ ] **Step 3:** Run `timeout 600 uv run pytest tests/gsheets/test_format_sheet_range.py -q`. Expected: the ported and new tests FAIL (missing parameters/helpers), the old ones pass.
-- [ ] **Step 4: Port the code.** Copy upstream `v2.4.0`'s helpers (list above) into `sheets_helpers.py`; replace `_format_sheet_range_impl` and `format_sheet_range` with their `v2.4.0` text (annotation `destructiveHint=True`); import the new helpers in `sheets_tools.py`. Then extend the wrapper's existing `logger.info` with `" Options: %s"` = the comma-joined names of the new options whose value is not `None` (omit the suffix when none).
-- [ ] **Step 5:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
-- [ ] **Step 6:** `git diff upstream-v2.4.0 -- gsheets/sheets_helpers.py | grep -c '^-.*_build_dropdown_request'` must be 0 (helper identical), then commit:
+- [x] **Step 3:** Run `timeout 600 uv run pytest tests/gsheets/test_format_sheet_range.py -q`. Expected: the ported and new tests FAIL (missing parameters/helpers), the old ones pass.
+- [x] **Step 4: Port the code.** Copy upstream `v2.4.0`'s helpers (list above) into `sheets_helpers.py`; replace `_format_sheet_range_impl` and `format_sheet_range` with their `v2.4.0` text (annotation `destructiveHint=True`); import the new helpers in `sheets_tools.py`. Then extend the wrapper's existing `logger.info` with `" Options: %s"` = the comma-joined names of the new options whose value is not `None` (omit the suffix when none).
+- [x] **Step 5:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
+- [x] **Step 6:** `git diff upstream-v2.4.0 -- gsheets/sheets_helpers.py | grep -c '^-.*_build_dropdown_request'` must be 0 (helper identical), then commit:
   `git add gsheets tests/gsheets && git commit -m "feat(sheets): dropdowns, merges and borders in format_sheet_range (DEV-3082)"`.
 
 ### Task 3: `manage_sheet_tab` — `style` action

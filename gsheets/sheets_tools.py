@@ -23,13 +23,17 @@ from gsheets.sheets_helpers import (
     _clamp_a1_read_rows,
     _column_to_index,
     _build_boolean_rule,
+    _build_dropdown_request,
     _build_gradient_rule,
+    _build_merge_request,
+    _build_update_borders_request,
     _fetch_cell_formulas,
     _fetch_detailed_sheet_errors,
     _fetch_grid_metadata,
     _fetch_sheets_with_rules,
     _format_conditional_rules_section,
     _format_sheet_error_section,
+    _normalize_merge_type,
     _parse_a1_range,
     _parse_condition_values,
     _parse_gradient_points,
@@ -479,11 +483,20 @@ async def _format_sheet_range_impl(
     bold: Optional[bool] = None,
     italic: Optional[bool] = None,
     font_size: Optional[int] = None,
-) -> str:
+    merge_cells: Optional[bool] = None,
+    merge_type: Optional[str] = None,
+    borders: Optional[str] = None,
+    border_style: Optional[str] = None,
+    border_color: Optional[str] = None,
+    dropdown_values: Optional[List[str]] = None,
+    dropdown_strict: Optional[bool] = None,
+    clear_dropdown: Optional[bool] = None,
+) -> dict:
     """Internal implementation for format_sheet_range.
 
     Applies formatting to a Google Sheets range including colors, number formats,
-    text wrapping, alignment, and text styling.
+    text wrapping, alignment, text styling, cell merging/unmerging, borders, and
+    dropdown lists.
 
     Args:
         service: Google Sheets API service client.
@@ -499,10 +512,41 @@ async def _format_sheet_range_impl(
         bold: Whether to apply bold formatting.
         italic: Whether to apply italic formatting.
         font_size: Font size in points.
+        merge_cells: True merges the range, False unmerges it.
+        merge_type: MERGE_ALL (default), MERGE_COLUMNS, or MERGE_ROWS; implies a merge.
+        borders: Comma-separated border sides (all, outer, inner, top, bottom,
+            left, right, inner_horizontal, inner_vertical), or "none".
+        border_style: Border line style (SOLID, SOLID_MEDIUM, SOLID_THICK,
+            DASHED, DOTTED, DOUBLE). Defaults to SOLID.
+        border_color: Hex border color. Defaults to black.
+        dropdown_values: Values offered as a dropdown list in every cell.
+        dropdown_strict: Reject other values (default True) or only warn.
+        clear_dropdown: Remove all data validation (dropdowns, checkboxes,
+            other rules) from the range.
 
     Returns:
         Dictionary with keys: range_name, spreadsheet_id, summary.
     """
+    if (border_style or border_color) and not borders:
+        raise UserInputError(
+            "border_style and border_color need borders to say which sides to draw."
+        )
+    border_request = None
+    border_summary = None
+    if borders:
+        border_request, border_summary = _build_update_borders_request(
+            borders, border_style, border_color
+        )
+    wants_dropdown = dropdown_values is not None or bool(clear_dropdown)
+    if dropdown_strict is not None and dropdown_values is None:
+        raise UserInputError("dropdown_strict needs dropdown_values.")
+    dropdown_request = None
+    dropdown_summary = None
+    if wants_dropdown:
+        dropdown_request, dropdown_summary = _build_dropdown_request(
+            dropdown_values, dropdown_strict, clear_dropdown
+        )
+
     # Validate at least one formatting option is provided
     has_any_format = any(
         [
@@ -515,14 +559,21 @@ async def _format_sheet_range_impl(
             bold is not None,
             italic is not None,
             font_size is not None,
+            merge_cells is not None,
+            merge_type is not None,
+            borders,
+            wants_dropdown,
         ]
     )
     if not has_any_format:
         raise UserInputError(
-            "Provide at least one formatting option (background_color, text_color, "
+            "Provide at least one formatting or merge option (background_color, text_color, "
             "number_format_type, wrap_strategy, horizontal_alignment, vertical_alignment, "
-            "bold, italic, or font_size)."
+            "bold, italic, font_size, merge_cells, merge_type, borders, dropdown_values, "
+            "or clear_dropdown)."
         )
+
+    normalized_merge_type = _normalize_merge_type(merge_cells, merge_type)
 
     # Parse colors
     bg_color_parsed = _parse_hex_color(background_color)
@@ -646,14 +697,9 @@ async def _format_sheet_range_impl(
         user_entered_format["verticalAlignment"] = v_align_normalized
         fields.append("userEnteredFormat.verticalAlignment")
 
-    if not user_entered_format:
-        raise UserInputError(
-            "No formatting applied. Verify provided formatting options."
-        )
-
-    # Build and execute request
-    request_body = {
-        "requests": [
+    requests = []
+    if user_entered_format:
+        requests.append(
             {
                 "repeatCell": {
                     "range": grid_range,
@@ -661,8 +707,27 @@ async def _format_sheet_range_impl(
                     "fields": ",".join(fields),
                 }
             }
-        ]
-    }
+        )
+    if normalized_merge_type:
+        requests.append(
+            _build_merge_request(grid_range, range_name, normalized_merge_type)
+        )
+    elif merge_cells is False:
+        requests.append({"unmergeCells": {"range": grid_range}})
+    if border_request:
+        border_request["updateBorders"]["range"] = grid_range
+        requests.append(border_request)
+    if dropdown_request:
+        dropdown_request["setDataValidation"]["range"] = grid_range
+        requests.append(dropdown_request)
+
+    if not requests:
+        raise UserInputError(
+            "No formatting or merge action applied. Verify provided options."
+        )
+
+    # Build and execute request
+    request_body = {"requests": requests}
 
     await asyncio.to_thread(
         service.spreadsheets()
@@ -693,6 +758,14 @@ async def _format_sheet_range_impl(
         applied_parts.append("italic" if italic else "not italic")
     if font_size is not None:
         applied_parts.append(f"font size {font_size}")
+    if normalized_merge_type:
+        applied_parts.append(f"merged cells ({normalized_merge_type})")
+    elif merge_cells is False:
+        applied_parts.append("unmerged cells")
+    if border_summary:
+        applied_parts.append(border_summary)
+    if dropdown_summary:
+        applied_parts.append(dropdown_summary)
 
     summary = ", ".join(applied_parts)
 
@@ -708,7 +781,7 @@ async def _format_sheet_range_impl(
     title="Format Sheet Range",
     annotations=ToolAnnotations(
         readOnlyHint=False,
-        destructiveHint=False,
+        destructiveHint=True,
         idempotentHint=False,
         openWorldHint=True,
     ),
@@ -730,10 +803,18 @@ async def format_sheet_range(
     bold: Optional[bool] = None,
     italic: Optional[bool] = None,
     font_size: Optional[int] = None,
+    merge_cells: Optional[bool] = None,
+    merge_type: Optional[str] = None,
+    borders: Optional[str] = None,
+    border_style: Optional[str] = None,
+    border_color: Optional[str] = None,
+    dropdown_values: Optional[StringList] = None,
+    dropdown_strict: Optional[bool] = None,
+    clear_dropdown: Optional[bool] = None,
 ) -> str:
     """
     Applies formatting to a range: colors, number formats, text wrapping,
-    alignment, and text styling.
+    alignment, text styling, cell merging/unmerging, borders, and dropdown lists.
 
     Colors accept hex strings (#RRGGBB). Number formats follow Sheets types
     (e.g., NUMBER, CURRENCY, DATE, PERCENT). If no sheet name is provided,
@@ -757,15 +838,49 @@ async def format_sheet_range(
         bold (Optional[bool]): Whether to apply bold formatting.
         italic (Optional[bool]): Whether to apply italic formatting.
         font_size (Optional[int]): Font size in points.
+        merge_cells (Optional[bool]): True merges the range, False unmerges it.
+            Merging keeps only the top-left value of each merged group.
+        merge_type (Optional[str]): MERGE_ALL (default), MERGE_COLUMNS, or
+            MERGE_ROWS. Setting it implies merge_cells=True.
+        borders (Optional[str]): Which borders to draw, comma-separated: all,
+            outer, inner, top, bottom, left, right, inner_horizontal,
+            inner_vertical (e.g., "outer" or "bottom,inner_horizontal").
+            "none" removes every border in the range.
+        border_style (Optional[str]): SOLID (default), SOLID_MEDIUM, SOLID_THICK,
+            DASHED, DOTTED, or DOUBLE. Requires borders.
+        border_color (Optional[str]): Hex border color (default black). Requires
+            borders.
+        dropdown_values (Optional[List[str]]): Turns every cell in the range into
+            a dropdown offering these values (e.g., ["open", "done"]).
+        dropdown_strict (Optional[bool]): With dropdown_values: reject other
+            input (default True) or only show a warning (False).
+        clear_dropdown (Optional[bool]): Remove all data validation from the
+            range: dropdowns, but also checkboxes and other validation rules.
 
     Returns:
         str: Confirmation of the applied formatting.
     """
+    # Log which options were used, never their values (dropdown values are user data).
+    used_options = [
+        name
+        for name, value in (
+            ("merge_cells", merge_cells),
+            ("merge_type", merge_type),
+            ("borders", borders),
+            ("border_style", border_style),
+            ("border_color", border_color),
+            ("dropdown_values", dropdown_values),
+            ("dropdown_strict", dropdown_strict),
+            ("clear_dropdown", clear_dropdown),
+        )
+        if value is not None
+    ]
     logger.info(
-        "[format_sheet_range] Invoked. Email: '%s', Spreadsheet: %s, Range: %s",
+        "[format_sheet_range] Invoked. Email: '%s', Spreadsheet: %s, Range: %s%s",
         user_google_email,
         spreadsheet_id,
         range_name,
+        f", Options: {', '.join(used_options)}" if used_options else "",
     )
 
     result = await _format_sheet_range_impl(
@@ -782,6 +897,14 @@ async def format_sheet_range(
         bold=bold,
         italic=italic,
         font_size=font_size,
+        merge_cells=merge_cells,
+        merge_type=merge_type,
+        borders=borders,
+        border_style=border_style,
+        border_color=border_color,
+        dropdown_values=dropdown_values,
+        dropdown_strict=dropdown_strict,
+        clear_dropdown=clear_dropdown,
     )
 
     # Build confirmation message with user email
