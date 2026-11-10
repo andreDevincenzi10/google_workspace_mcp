@@ -75,11 +75,11 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 **Interfaces:**
 - Produces: `_build_tab_style_properties(tab_color: Optional[str] = None, show_gridlines: Optional[bool] = None) -> tuple[dict, str, str]`; `manage_sheet_tab(..., tab_color: Optional[str] = None, show_gridlines: Optional[bool] = None)`.
 
-- [ ] **Step 1:** Port the `v2.4.0` tests of the `style` action from `upstream-v2.4.0:tests/gsheets/test_manage_sheet_tab.py` (the cases absent from the fork file: tab color, `"none"`, gridlines, non-GRID sheet, style args with another action, style with no args).
-- [ ] **Step 2:** Run `timeout 600 uv run pytest tests/gsheets/test_manage_sheet_tab.py -q`. Expected: new tests FAIL.
-- [ ] **Step 3:** Port `_build_tab_style_properties` and the `v2.4.0` text of `manage_sheet_tab` (docstring, `valid_actions` with `"style"`, the pre-check and the `style` branch). Keep the fork's decorators/annotations of `manage_sheet_tab` unchanged.
-- [ ] **Step 4:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
-- [ ] **Step 5:** Commit: `git commit -am "feat(sheets): style action in manage_sheet_tab (DEV-3082)"`.
+- [x] **Step 1:** Port the `v2.4.0` tests of the `style` action from `upstream-v2.4.0:tests/gsheets/test_manage_sheet_tab.py` (the cases absent from the fork file: tab color, `"none"`, gridlines, non-GRID sheet, style args with another action, style with no args).
+- [x] **Step 2:** Run `timeout 600 uv run pytest tests/gsheets/test_manage_sheet_tab.py -q`. Expected: new tests FAIL.
+- [x] **Step 3:** Port `_build_tab_style_properties` and the `v2.4.0` text of `manage_sheet_tab` (docstring, `valid_actions` with `"style"`, the pre-check and the `style` branch). Keep the fork's decorators/annotations of `manage_sheet_tab` unchanged.
+- [x] **Step 4:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
+- [x] **Step 5:** Commit: `git commit -am "feat(sheets): style action in manage_sheet_tab (DEV-3082)"`.
 
 ## Phase 3: `batch_update_spreadsheet`, tiers, docs and validation
 

@@ -26,6 +26,7 @@ from gsheets.sheets_helpers import (
     _build_dropdown_request,
     _build_gradient_rule,
     _build_merge_request,
+    _build_tab_style_properties,
     _build_update_borders_request,
     _fetch_cell_formulas,
     _fetch_detailed_sheet_errors,
@@ -2308,9 +2309,12 @@ async def manage_sheet_tab(
     action: str,
     new_name: Optional[str] = None,
     new_index: Optional[int] = None,
+    tab_color: Optional[str] = None,
+    show_gridlines: Optional[bool] = None,
 ) -> str:
     """
-    Manages the lifecycle of an existing sheet tab: rename, delete, hide, unhide or reorder.
+    Manages an existing sheet tab: rename, delete, hide, unhide, reorder, or
+    style (tab color and gridlines).
 
     Use create_sheet to add a tab, and resize_sheet_dimensions for row and column
     level changes. This tool operates on the tab itself.
@@ -2319,14 +2323,18 @@ async def manage_sheet_tab(
         user_google_email: User's Google email address
         spreadsheet_id: ID of the spreadsheet
         sheet_name: Title of the existing tab to act on
-        action: One of "rename", "delete", "hide", "unhide", "reorder"
+        action: One of "rename", "delete", "hide", "unhide", "reorder", "style"
         new_name: New title, required for action="rename"
         new_index: New zero-based position, required for action="reorder"
+        tab_color: For action="style": hex tab color (#RRGGBB), or "none" to
+            remove it
+        show_gridlines: For action="style": show (True) or hide (False) the
+            sheet's gridlines
 
     Returns:
         str: Confirmation of the change.
     """
-    valid_actions = ("rename", "delete", "hide", "unhide", "reorder")
+    valid_actions = ("rename", "delete", "hide", "unhide", "reorder", "style")
     action_lower = action.strip().lower() if isinstance(action, str) else ""
     if action_lower not in valid_actions:
         raise UserInputError(
@@ -2347,6 +2355,14 @@ async def manage_sheet_tab(
             raise UserInputError(
                 "new_index must be a non-negative integer for action='reorder'."
             )
+    if action_lower == "style":
+        style_properties, style_fields, style_summary = _build_tab_style_properties(
+            tab_color, show_gridlines
+        )
+    elif tab_color is not None or show_gridlines is not None:
+        raise UserInputError(
+            "tab_color and show_gridlines only apply to action='style'."
+        )
 
     logger.info(
         f"[manage_sheet_tab] Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, "
@@ -2379,6 +2395,15 @@ async def manage_sheet_tab(
             properties["hidden"] = action_lower == "hide"
             fields = "hidden"
             summary = f"{action_lower} sheet '{sheet_name}'"
+        elif action_lower == "style":
+            sheet_type = target_sheet["properties"].get("sheetType", "GRID")
+            if show_gridlines is not None and sheet_type != "GRID":
+                raise UserInputError(
+                    f"'{sheet_name}' is a {sheet_type} sheet and has no gridlines."
+                )
+            properties.update(style_properties)
+            fields = style_fields
+            summary = f"styled sheet '{sheet_name}' ({style_summary})"
         else:
             if new_index >= len(sheets):
                 raise UserInputError(
