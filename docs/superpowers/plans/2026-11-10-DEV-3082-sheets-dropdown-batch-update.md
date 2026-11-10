@@ -113,7 +113,7 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 - Consumes: `_validate_batch_update_requests`, `MAX_BATCH_UPDATE_REPLY_CHARS` (Task 4).
 - Produces: `async def batch_update_spreadsheet(service, user_google_email: str, spreadsheet_id: str, requests: DictList) -> str`, decorators and annotations exactly as the spec's §2.
 
-- [ ] **Step 1: Write the failing tests** (mock `service` like `tests/gsheets/test_format_sheet_range.py`: `service.spreadsheets().batchUpdate(...).execute` returns the reply; call `batch_update_spreadsheet.fn` the way the ported wrapper tests call tools):
+- [x] **Step 1: Write the failing tests** (mock `service` like `tests/gsheets/test_format_sheet_range.py`: `service.spreadsheets().batchUpdate(...).execute` returns the reply; call `batch_update_spreadsheet.fn` the way the ported wrapper tests call tools):
   - `test_batch_update_passes_requests_unchanged` — two requests (the spec's `setBasicFilter` and `sortRange` examples); assert `batchUpdate` called once with `spreadsheetId="sid"`, `body={"requests": <same list>}`; result contains `Applied 2 request(s)` and `setBasicFilter, sortRange`; reply `{"replies": [{}, {}]}` → no `Replies:` in result.
   - `test_batch_update_includes_non_empty_replies` — reply `{"replies": [{"addChart": {"chart": {"chartId": 7}}}]}` → result contains `Replies:` and `"chartId": 7`.
   - `test_batch_update_truncates_long_replies` — a reply whose JSON exceeds 4000 chars → the `Replies:` payload is 4000 chars followed by `… (truncated)`.
@@ -123,10 +123,10 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
   - `test_batch_update_is_destructive_write_tool` — registered tool annotations `destructiveHint is True`, `readOnlyHint is False` (same lookup as the ported `test_format_sheet_range_is_destructive`).
   - `test_batch_update_description_guides_the_agent` — the tool's description contains `setBasicFilter`, `sortRange`, `format_sheet_range`, `deleteSheet`, `get_spreadsheet_info`.
   - `test_batch_update_accepts_json_string_requests` — `pydantic.TypeAdapter(DictList).validate_python('[{"sortRange": {}}]') == [{"sortRange": {}}]`, or through the registered tool's argument validation if the repo has that harness.
-- [ ] **Step 2:** Run `uv run pytest tests/gsheets/test_batch_update_spreadsheet.py -q`. Expected: new tests FAIL.
-- [ ] **Step 3:** Implement the tool per spec §2 (docstring order and both literal examples from the spec; `logger.info("[batch_update_spreadsheet] Invoked. Email: '%s', Spreadsheet: %s, Requests: %d, Kinds: %s", …)`; one `asyncio.to_thread(service.spreadsheets().batchUpdate(spreadsheetId=..., body={"requests": requests}).execute)`).
-- [ ] **Step 4:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
-- [ ] **Step 5:** Commit: `git add gsheets tests/gsheets && git commit -m "feat(sheets): batch_update_spreadsheet passthrough tool (DEV-3082)"`.
+- [x] **Step 2:** Run `uv run pytest tests/gsheets/test_batch_update_spreadsheet.py -q`. Expected: new tests FAIL.
+- [x] **Step 3:** Implement the tool per spec §2 (docstring order and both literal examples from the spec; `logger.info("[batch_update_spreadsheet] Invoked. Email: '%s', Spreadsheet: %s, Requests: %d, Kinds: %s", …)`; one `asyncio.to_thread(service.spreadsheets().batchUpdate(spreadsheetId=..., body={"requests": requests}).execute)`).
+- [x] **Step 4:** Run `timeout 600 uv run pytest tests/gsheets -q`. Expected: all pass.
+- [x] **Step 5:** Commit: `git add gsheets tests/gsheets && git commit -m "feat(sheets): batch_update_spreadsheet passthrough tool (DEV-3082)"`.
 
 ### Task 6: Tier list, scope test and skill reference
 

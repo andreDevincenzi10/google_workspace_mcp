@@ -14,10 +14,11 @@ from mcp.types import ToolAnnotations
 
 from auth.service_decorator import require_google_service
 from core.server import server
-from core.utils import handle_http_errors, UserInputError, StringList
+from core.utils import DictList, handle_http_errors, UserInputError, StringList
 from core.comments import create_comment_tools
 from gsheets.sheets_helpers import (
     CONDITION_TYPES,
+    MAX_BATCH_UPDATE_REPLY_CHARS,
     MAX_READ_SHEET_ROWS,
     _a1_range_for_values,
     _clamp_a1_read_rows,
@@ -40,6 +41,7 @@ from gsheets.sheets_helpers import (
     _parse_gradient_points,
     _parse_hex_color,
     _select_sheet,
+    _validate_batch_update_requests,
     _values_contain_sheets_errors,
 )
 
@@ -913,6 +915,84 @@ async def format_sheet_range(
         f"Applied formatting to range '{result['range_name']}' in spreadsheet "
         f"{result['spreadsheet_id']} for {user_google_email}: {result['summary']}."
     )
+
+
+@server.tool(
+    title="Batch Update Spreadsheet",
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+@handle_http_errors("batch_update_spreadsheet", service_type="sheets")
+@require_google_service("sheets", "sheets_write")
+async def batch_update_spreadsheet(
+    service,
+    user_google_email: str,
+    spreadsheet_id: str,
+    requests: DictList,
+) -> str:
+    """
+    Generic passthrough of the Google Sheets spreadsheets.batchUpdate API: sends
+    the given requests, in order, in one atomic call.
+
+    Prefer the specific tools when they cover the change: format_sheet_range
+    (formats, merges, borders, dropdowns), manage_conditional_formatting,
+    manage_sheet_tab, resize_sheet_dimensions and move_sheet_rows. Use this tool
+    for what they do not offer: filters (setBasicFilter, clearBasicFilter,
+    addFilterView), sorting (sortRange), checkboxes (setDataValidation with
+    condition type BOOLEAN), charts (addChart), protection (addProtectedRange),
+    pivot tables (updateCells with pivotTable) and find/replace (findReplace).
+
+    sheetId is the numeric tab id from get_spreadsheet_info, not the tab title.
+    Ranges are zero-based GridRange objects with exclusive end indexes.
+    deleteSheet, deleteRange and deleteDimension delete data: use them only when
+    the user asked for it.
+
+    Example, a filter on the header of the first 5 columns:
+    [{"setBasicFilter": {"filter": {"range": {"sheetId": 0, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": 5}}}}]
+
+    Example, sort the rows below the header by the third column, descending:
+    [{"sortRange": {"range": {"sheetId": 0, "startRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 5}, "sortSpecs": [{"dimensionIndex": 2, "sortOrder": "DESCENDING"}]}}]
+
+    Args:
+        user_google_email (str): The user's Google email address. Required.
+        spreadsheet_id (str): The ID of the spreadsheet. Required.
+        requests (List[dict]): 1 to 100 Sheets API requests; each item is an
+            object with exactly one request type as its key.
+
+    Returns:
+        str: Confirmation with the applied request types and, when the API
+            returns any, its replies (truncated when long).
+    """
+    kinds = _validate_batch_update_requests(requests)
+    logger.info(
+        "[batch_update_spreadsheet] Invoked. Email: '%s', Spreadsheet: %s, Requests: %d, Kinds: %s",
+        user_google_email,
+        spreadsheet_id,
+        len(requests),
+        ", ".join(kinds),
+    )
+
+    response = await asyncio.to_thread(
+        service.spreadsheets()
+        .batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": requests})
+        .execute
+    )
+
+    text = (
+        f"Applied {len(requests)} request(s) to spreadsheet {spreadsheet_id} "
+        f"for {user_google_email}: {', '.join(kinds)}."
+    )
+    replies = (response or {}).get("replies") or []
+    if any(replies):
+        payload = json.dumps(replies)
+        if len(payload) > MAX_BATCH_UPDATE_REPLY_CHARS:
+            payload = payload[:MAX_BATCH_UPDATE_REPLY_CHARS] + " … (truncated)"
+        text += f"\nReplies: {payload}"
+    return text
 
 
 @server.tool(
