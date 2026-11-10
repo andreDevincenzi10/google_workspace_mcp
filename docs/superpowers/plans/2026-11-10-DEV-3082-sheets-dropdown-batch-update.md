@@ -135,10 +135,10 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 - Modify: `skills/managing-google-workspace/references/sheets.md` (new `format_sheet_range` parameters, `manage_sheet_tab` `style`, a `batch_update_spreadsheet` section with the two spec examples and the "prefer specific tools" rule)
 - Test: `tests/test_scopes.py` or `tests/test_permissions.py` — whichever asserts per-tool scopes; extend it with `batch_update_spreadsheet` → `sheets_write` in the same style.
 
-- [ ] **Step 1:** Add the scope assertion; run `uv run pytest tests/test_scopes.py tests/test_permissions.py tests/test_main_permissions_tier.py -q`. Expected: the new assertion passes or fails only on the tier list (fix by Step 2).
-- [ ] **Step 2:** Edit `core/tool_tiers.yaml` and the skill reference.
-- [ ] **Step 3:** Run the three test files again. Expected: PASS.
-- [ ] **Step 4:** Commit: `git add core/tool_tiers.yaml skills tests && git commit -m "docs(sheets): tier and skill reference for the new Sheets tools (DEV-3082)"`.
+- [x] **Step 1:** Add the scope assertion; run `uv run pytest tests/test_scopes.py tests/test_permissions.py tests/test_main_permissions_tier.py -q`. Expected: the new assertion passes or fails only on the tier list (fix by Step 2).
+- [x] **Step 2:** Edit `core/tool_tiers.yaml` and the skill reference.
+- [x] **Step 3:** Run the three test files again. Expected: PASS.
+- [x] **Step 4:** Commit: `git add core/tool_tiers.yaml skills tests && git commit -m "docs(sheets): tier and skill reference for the new Sheets tools (DEV-3082)"`.
 
 ### Task 7: Full check, local boot, push
 

@@ -227,3 +227,25 @@ def test_batch_update_accepts_json_string_requests():
     adapter = TypeAdapter(DictList)
 
     assert adapter.validate_python('[{"sortRange": {}}]') == [{"sortRange": {}}]
+
+
+def test_batch_update_is_in_the_complete_tier_of_sheets():
+    from core.tool_tier_loader import resolve_tools_from_tier
+
+    core_tools, _ = resolve_tools_from_tier("core", ["sheets"])
+    complete_tools, services = resolve_tools_from_tier("complete", ["sheets"])
+
+    assert "batch_update_spreadsheet" in complete_tools
+    assert "batch_update_spreadsheet" not in core_tools
+    assert services == ["sheets"]
+
+
+def test_batch_update_requires_the_sheets_write_scope():
+    import inspect
+    import re
+
+    source = inspect.getsource(sheets_tools)
+    block = source[: source.index("async def batch_update_spreadsheet(")]
+    decorators = block[block.rindex("@server.tool(") :]
+
+    assert re.search(r'@require_google_service\("sheets", "sheets_write"\)', decorators)
