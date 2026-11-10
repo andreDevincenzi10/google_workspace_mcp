@@ -92,16 +92,16 @@ Feature code is the text of upstream tag `v2.4.0` (local tag `upstream-v2.4.0` i
 **Interfaces:**
 - Produces: `MAX_BATCH_UPDATE_REQUESTS = 100`, `MAX_BATCH_UPDATE_REPLY_CHARS = 4000`, `_validate_batch_update_requests(requests: List[Any]) -> List[str]` (kinds in order; raises `UserInputError`).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `test_validate_returns_kinds_in_order` — `[{"setBasicFilter": {}}, {"sortRange": {}}]` → `["setBasicFilter", "sortRange"]`.
   - `test_validate_rejects_empty` — `[]` → `UserInputError` matching `at least one request`.
   - `test_validate_rejects_over_limit` — 101 items → `UserInputError` whose message contains `100`; 100 items pass.
   - `test_validate_rejects_non_dict_item` — `[{"sortRange": {}}, "x"]` → message contains `requests[1]`.
   - `test_validate_rejects_multi_key_item` — `[{"sortRange": {}, "addChart": {}}]` and `[{}]` → message contains `requests[0]` and `exactly one request type`.
-- [ ] **Step 2:** Run `uv run pytest tests/gsheets/test_batch_update_spreadsheet.py -q`. Expected: FAIL (import error).
-- [ ] **Step 3:** Implement the constants and `_validate_batch_update_requests` in `sheets_helpers.py` with the spec's messages.
-- [ ] **Step 4:** Run the file again. Expected: PASS.
-- [ ] **Step 5:** Commit: `git add gsheets tests/gsheets && git commit -m "feat(sheets): validate batchUpdate requests (DEV-3082)"`.
+- [x] **Step 2:** Run `uv run pytest tests/gsheets/test_batch_update_spreadsheet.py -q`. Expected: FAIL (import error).
+- [x] **Step 3:** Implement the constants and `_validate_batch_update_requests` in `sheets_helpers.py` with the spec's messages.
+- [x] **Step 4:** Run the file again. Expected: PASS.
+- [x] **Step 5:** Commit: `git add gsheets tests/gsheets && git commit -m "feat(sheets): validate batchUpdate requests (DEV-3082)"`.
 
 ### Task 5: `batch_update_spreadsheet` tool
 

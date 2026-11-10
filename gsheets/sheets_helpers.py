@@ -10,7 +10,7 @@ import json
 import logging
 import math
 import re
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from core.utils import UserInputError
 
@@ -28,6 +28,8 @@ SHEET_TITLE_SAFE_RE = re.compile(r"^[A-Za-z0-9_]+$")
 COLUMN_LETTER_REGEX = re.compile(r"^[A-Za-z]+$")
 QUOTED_SHEET_ONLY_REGEX = re.compile(r"^'(?:[^']|'')+'$")
 MERGE_TYPES = ("MERGE_ALL", "MERGE_COLUMNS", "MERGE_ROWS")
+MAX_BATCH_UPDATE_REQUESTS = 100
+MAX_BATCH_UPDATE_REPLY_CHARS = 4000
 
 
 def _column_to_index(column: str) -> Optional[int]:
@@ -466,6 +468,33 @@ def _build_tab_style_properties(
         fields.append("gridProperties.hideGridlines")
         parts.append("gridlines shown" if show_gridlines else "gridlines hidden")
     return properties, ",".join(fields), ", ".join(parts)
+
+
+def _validate_batch_update_requests(requests: List[Any]) -> List[str]:
+    """
+    Validate the requests of a generic spreadsheets.batchUpdate call.
+
+    Each request must be an object with exactly one key, the request type
+    (e.g. "sortRange"). The request bodies themselves are left to the API.
+
+    Returns:
+        The request kinds (each item's single key), in order.
+    """
+    if not requests:
+        raise UserInputError("requests must contain at least one request.")
+    if len(requests) > MAX_BATCH_UPDATE_REQUESTS:
+        raise UserInputError(
+            f"requests can hold at most {MAX_BATCH_UPDATE_REQUESTS} items; "
+            f"got {len(requests)}. Split them across several calls."
+        )
+    kinds = []
+    for index, item in enumerate(requests):
+        if not isinstance(item, dict) or len(item) != 1:
+            raise UserInputError(
+                f'requests[{index}] must be an object with exactly one request type, e.g. {{"sortRange": {{...}}}}.'
+            )
+        kinds.append(next(iter(item)))
+    return kinds
 
 
 def _index_to_column(index: int) -> str:
